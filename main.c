@@ -7,7 +7,11 @@
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/eeprom.h>
 #include "USART.h"
+#include "io.c"
+
+
 
 volatile unsigned char TimerFlag = 0; //TimerISR() sets this to 1. c programmer should clear to 0
 
@@ -76,42 +80,216 @@ void TimerSet(unsigned long M)
 
 }
 
+enum C_States{C_Initial, C_Wait }C_State;
 
+unsigned char movement= 0;
+unsigned char pass = 0;
+unsigned char hold;
+
+
+
+
+void C_Tick()
+{
+	switch(C_State)
+	{
+		case C_Initial:
+		C_State = C_Wait;
+		break;
+		
+		case C_Wait:
+			if(USART_HasReceived(0))
+			{
+				pass++;
+
+				if(pass >=21 && pass <= 39)
+				{
+					movement++;	
+				}
+				else if(pass==40)
+				{
+					movement = 0;
+				}
+				else if(pass >= 41 && pass <= 59)
+				{
+					movement++;
+				}
+				else if(pass==60)
+				{
+					movement = 0;
+				}
+				else if(pass >= 61 && pass <= 79)
+				{
+					movement++;
+				}
+				else if(pass==80)
+				{
+					movement = 0;
+				}
+
+				USART_Flush(0);
+				C_State = C_Wait;
+			}
+			else
+			{
+				C_State = C_Wait;
+			}
+
+		break;
+
+		default:
+		C_State = C_Initial;
+		break;
+	}
+
+
+	switch(C_State)
+	{
+		case C_Initial:
+		break;
+		
+		case C_Wait:
+		break;
+
+		default:
+		break;
+	}
+
+}
+
+enum LCD_States{LCD_Initial, LCD_Wait }LCD_State;
+unsigned char counter = 0;
+const unsigned char* Test[20]={"00","05","10","15","20","25","30","35","40","45","50","55","60","65","70","75","80","85","90","95"};
+const unsigned char* Test2[20]={"1.", "2.","3.","4.","5.","6.","7.","8.","9.","10.","11.","12.","13.","14.","15.","16.","17.","18.","19.","20."};
+
+void LCD_Tick()
+{
+
+	switch(LCD_State)
+	{
+		case LCD_Initial:
+			LCD_State = LCD_Wait;
+		break;
+		
+		case LCD_Wait:
+		if(counter < 20)
+		{
+			counter++;
+			LCD_State = LCD_Wait;
+		}
+		else if(counter >= 20)
+		{
+			if(pass <= 19)
+			{
+				LCD_DisplayString(1, "Change:.");
+				LCD_DisplayString(9, Test[(int)pass]);
+
+			}
+			else if(pass >= 20)
+			{
+				
+				if(pass==20)
+				{
+					hold=0;
+				}
+				else if(pass==40)
+				{
+					hold=1;
+				}
+				else if(pass==60)
+				{
+					hold=2;
+				}
+				LCD_DisplayString(1, "Change:");
+				LCD_DisplayString(8, Test2[(int)hold]);
+				LCD_DisplayString(10, Test[(int)movement]);
+			}
+			
+			LCD_State = LCD_Wait;
+			counter = 0;
+		}
+		break;
+
+		default:
+		LCD_State = LCD_Initial;
+		break;
+	}
+
+switch(LCD_State)
+{
+	case LCD_Initial:
+	break;
+	
+	case LCD_Wait:
+	break;
+
+	default:
+	break;
+}
+
+}
 
 int main(void)
 {
 
 	DDRB = 0xFF; PORTB = 0x00;
-	DDRA = 0x00; PORTA = 0xFF;
+	DDRA = 0x03; PORTA = 0xFC;
 	DDRD = 0x00; PORTD = 0xFF;
-
-	unsigned char coinage = 0;
-	//unsigned char hold;
-	TimerSet(25);
-	TimerOn();
-	USART_Init(0);
-	USART_Flush(0);
+	DDRC = 0xFF; PORTC = 0x00;
+	LCD_State = LCD_Initial;
+	C_State = C_Initial;
 	
 
+	//usart initialization
+	initUSART(0);
+	USART_Flush(0);
+
+	TimerSet(25);
+	TimerOn();
+	LCD_init();
+	
 		while(1)
 		{
 			
+			C_Tick();
+			LCD_Tick();
 			
-			if(USART_HasReceived(0))
-			{
-				coinage = USART_Receive(0);
-			}
+			//if(USART_HasReceived(0))
+			//{
+				//pass++;
+				//USART_Flush(0);
+			//}
+			//
+			//if(counter	< 20 )
+			//{
+				//counter++;
+			//}
+			//else if(counter >=20 )
+			//{
+				//LCD_DisplayString(1, "Change:");
+				//LCD_DisplayString(7, Test[(int)pass]);
+				//counter = 0;
+//
+			//}
+
 			
-			if(coinage != 0)
-			{
-				PORTB = coinage;
-			}
+		
+				
+			//if(USART_HasReceived(0))
+			//{
+				//pass++;
+				//coinage = USART_Receive(0);
+				//
+			//
+			//
 			
-			
+
 			while(!TimerFlag); //Wait 1 sec
 			TimerFlag = 0;
 
 		}
+
+		
 
 	//unsigned char button;
 
